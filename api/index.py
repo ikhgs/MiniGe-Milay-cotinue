@@ -79,7 +79,7 @@ def process_image_and_prompt():
 
     return jsonify({"response": response.text, "session_id": session_id})
 
-@app.route('/api/query', methods=['GET'])
+@app.route('/api/process', methods=['GET'])
 def query_prompt():
     prompt = request.args.get('prompt')
     session_id = request.args.get('session_id')
