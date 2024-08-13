@@ -73,31 +73,6 @@ def process_image_and_prompt():
 
     return jsonify({"response": response.text})
 
-@app.route('/api/query', methods=['GET'])
-def query_prompt():
-    user_id = request.args.get('user_id', default='default_user')
-    prompt = request.args.get('prompt')
-    if not prompt:
-        return jsonify({"error": "Prompt is required."}), 400
-
-    # Obtenir l'historique existant pour l'utilisateur
-    chat_history = user_context.get(user_id, [])
-    
-    # Ajouter la nouvelle question à l'historique
-    chat_history.append({
-        "role": "user",
-        "parts": [prompt],
-    })
-
-    # Create the chat session with the updated history
-    chat_session = model.start_chat(history=chat_history)
-
-    response = chat_session.send_message(prompt)
-
-    # Mettre à jour le contexte de l'utilisateur avec la nouvelle réponse
-    user_context[user_id] = chat_history + [{"role": "assistant", "parts": [response.text]}]
-
-    return jsonify({"response": response.text})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
