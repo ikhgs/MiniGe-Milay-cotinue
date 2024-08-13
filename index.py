@@ -28,13 +28,35 @@ model = genai.GenerativeModel(
     generation_config=generation_config,
 )
 
+# In-memory storage for chat sessions (use a database for production)
+chat_sessions = {}
+
 @app.route('/api/process', methods=['POST'])
 def process_image_and_prompt():
     if 'image' not in request.files or 'prompt' not in request.form:
         return jsonify({"error": "Image and prompt are required."}), 400
 
+    session_id = request.form.get('session_id')
+    theme = request.form.get('theme', 'default')
+    
+    # Handle session reset
+    if not session_id or session_id not in chat_sessions:
+        session_id = str(len(chat_sessions) + 1)
+        chat_sessions[session_id] = model.start_chat(
+            history=[],
+            theme=theme
+        )
+
     image = request.files['image']
     prompt = request.form['prompt']
+
+    # Handle conversation reset
+    if prompt.lower() == 'stop':
+        chat_sessions[session_id] = model.start_chat(
+            history=[],
+            theme=theme
+        )
+        return jsonify({"response": "Conversation has been reset.", "session_id": session_id})
 
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
@@ -44,46 +66,51 @@ def process_image_and_prompt():
         # Upload the image to Gemini
         file_uri = upload_to_gemini(image_path, mime_type=image.mimetype)
 
-        # Create the chat session with the image and prompt
-        chat_session = model.start_chat(
-            history=[
-                {
-                    "role": "user",
-                    "parts": [
-                        file_uri,
-                        prompt,
-                    ],
-                },
-            ]
+        # Update the chat session with the image and prompt
+        chat_session = chat_sessions[session_id]
+        chat_session.history.append(
+            {
+                "role": "user",
+                "parts": [file_uri, prompt],
+            }
         )
 
-        response = chat_session.send_message(prompt, role="user")
+        response = chat_session.send_message(prompt)
 
     # Clean up temporary file
     os.remove(image_path)
 
-    return jsonify({"response": response.text})
+    return jsonify({"response": response.text, "session_id": session_id})
 
 @app.route('/api/query', methods=['GET'])
 def query_prompt():
     prompt = request.args.get('prompt')
-    if not prompt:
-        return jsonify({"error": "Prompt is required."}), 400
+    session_id = request.args.get('session_id')
+    
+    if not prompt or not session_id or session_id not in chat_sessions:
+        return jsonify({"error": "Valid session ID and prompt are required."}), 400
 
-    # Create the chat session with the prompt
-    chat_session = model.start_chat(
-        history=[
-            {
-                "role": "user",  # Assurez-vous que le rôle 'user' est bien défini
-                "parts": [prompt],
-            },
-        ]
+    # Handle conversation reset
+    if prompt.lower() == 'stop':
+        chat_sessions[session_id] = model.start_chat(
+            history=[],
+            theme=chat_sessions[session_id].theme
+        )
+        return jsonify({"response": "Conversation has been reset.", "session_id": session_id})
+
+    # Retrieve the chat session
+    chat_session = chat_sessions[session_id]
+    
+    # Update the chat session with the new prompt
+    chat_session.history.append(
+        {
+            "role": "user",
+            "parts": [prompt],
+        }
     )
 
-    # Send the message as the user role
-    response = chat_session.send_message(prompt, role="user")
-
-    return jsonify({"response": response.text})
+    response = chat_session.send_message(prompt)
+    return jsonify({"response": response.text, "session_id": session_id})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
