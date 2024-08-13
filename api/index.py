@@ -87,21 +87,17 @@ def query_prompt():
     prompt = request.args.get('prompt')
     session_id = request.args.get('session_id')
     
-    if not prompt or not session_id or session_id not in chat_sessions:
+    # Vérification des paramètres
+    if not prompt or not session_id:
         return jsonify({"error": "Valid session ID and prompt are required."}), 400
 
-    # Handle conversation reset
-    if prompt.lower() == 'stop':
-        chat_sessions[session_id] = model.start_chat(
-            history=[],
-            theme=chat_sessions[session_id].theme
-        )
-        return jsonify({"response": "Conversation has been reset.", "session_id": session_id})
-
-    # Retrieve the chat session
-    chat_session = chat_sessions[session_id]
+    # Récupération de la session de chat (ici il faut avoir un moyen de stocker et récupérer les sessions)
+    chat_session = chat_sessions.get(session_id)
     
-    # Update the chat session with the new prompt
+    if not chat_session:
+        return jsonify({"error": "Session ID not found."}), 404
+
+    # Ajout du prompt à l'historique de la session
     chat_session.history.append(
         {
             "role": "user",
@@ -109,6 +105,7 @@ def query_prompt():
         }
     )
 
+    # Envoi du message et récupération de la réponse
     response = chat_session.send_message(prompt)
     return jsonify({"response": response.text, "session_id": session_id})
 
