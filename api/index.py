@@ -37,14 +37,12 @@ def process_image_and_prompt():
         return jsonify({"error": "Image and prompt are required."}), 400
 
     session_id = request.form.get('session_id')
-    theme = request.form.get('theme', 'default')
-    
+
     # Handle session reset
     if not session_id or session_id not in chat_sessions:
         session_id = str(len(chat_sessions) + 1)
         chat_sessions[session_id] = model.start_chat(
-            history=[],
-            theme=theme
+            history=[]
         )
 
     image = request.files['image']
@@ -53,8 +51,7 @@ def process_image_and_prompt():
     # Handle conversation reset
     if prompt.lower() == 'stop':
         chat_sessions[session_id] = model.start_chat(
-            history=[],
-            theme=theme
+            history=[]
         )
         return jsonify({"response": "Conversation has been reset.", "session_id": session_id})
 
